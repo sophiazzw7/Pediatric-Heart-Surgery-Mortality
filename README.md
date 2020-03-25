@@ -57,3 +57,8 @@ mortality ratio overlapped with the number 1
 • three stars: lower than expected operative mortality; the 95% CI for a participant’s risk-adjusted
 O/E mortality ratio was entirely below the number 1
 
+Conclusion
+------------------
+The first general observation is that while shrinkage from bayesian methods is desired in many cases, we have to be very careful in the form of the shrinkage, especially in cases where the group sample size might influence the analysis results of interest. Incorporating structure into the shrinkage is desired in this case and many others. Second, it is found that UNC Hospital is on the top of the mortality rate ranking for both the posterior effects of hospital and posterior adjusted for volume. While the result is not statistically significant, it is clearly practically relevant since it is a clinical matter than affects life and death of people. Of course, the O/E and star metric seems to suggest that UNC indeed had one of the lowest mortality rates amongst hospitals in the nation. This suggest that UNC's high empirical mortality rate might be associated with its volume and a potentially challenging case mix. That being said, I think that the media attention is justified since this is a matter of clinical relevance and life/death, and further investigation is needed to investigate whether these effects are significant and what their causes are. 
+
+
