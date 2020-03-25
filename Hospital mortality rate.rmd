@@ -1,0 +1,198 @@
+---
+title: "Hospital Mortality Rate Estimation"
+author: "Sophia Zhu"
+date: "11/27/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Data 
+
+```{r}
+load("cardiomort.RData")
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(brms)
+```
+
+## Added UNC and drop overall categories from training data
+```{r}
+df<-cardio %>% mutate(hospital = `Hospital Name`, procedure = `Procedure Type`, deaths = `Observed Deaths`, total = `Total Procedures`, expected = `Expected Mortality Rate`) %>% select(-c(`Hospital Name`, `Procedure Type`, `Observed Deaths`, `Expected Mortality Rate`, `Total Procedures`))
+overall.save<-df %>% group_by(`hospital`) %>% filter(`procedure` == "Overall") %>% mutate(observed = deaths/total) %>% select(observed)
+overall.save[nrow(overall.save) + 1, ] <- c("UNC Hospital", 0.064)
+overall.save <- overall.save %>% mutate(observed = as.numeric(observed))
+df<- df %>% filter(procedure != "Overall") %>% select(-id)
+df[nrow(df) + 1, ] = c("UNC Hospital", "STAT Mortality Category 1", 1,94,0.004)
+df[nrow(df) + 1, ] = c("UNC Hospital", "STAT Mortality Category 2", 2,136,0.014)
+df[nrow(df) + 1, ] = c("UNC Hospital", "STAT Mortality Category 3", 4,70,0.016)
+df[nrow(df) + 1, ] = c("UNC Hospital", "STAT Mortality Category 4", 11,81,0.078)
+df[nrow(df) + 1, ] = c("UNC Hospital", "STAT Mortality Category 5", 7,12,0.173)
+df <- df %>% mutate(deaths = as.numeric(deaths), total = as.numeric(total), expected = as.numeric(expected))
+df <- df %>% group_by(hospital) %>% mutate(log_volume_h = log(sum(total) + 1))  %>% ungroup() 
+df <- df %>% group_by(procedure) %>% mutate(log_volume_p = log(sum(total) + 1))  %>% ungroup() 
+df <- df %>% group_by(hospital) %>% mutate(log_volume_h_sq = log(sum(total) + 1)^2)  %>% ungroup() 
+df <- df %>% group_by(procedure) %>% mutate(log_volume_p_sq = log(sum(total) + 1)^2)  %>% ungroup() 
+```
+
+```{r}
+head(df)
+```
+
+## EDA and Plots
+```{r}
+df %>% group_by(procedure) %>% summarise(rate = mean(deaths/total), expected = mean(expected))
+```
+
+```{r}
+ggplot(df, aes(x = procedure, y = deaths/total)) + geom_point() +  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ggtitle("Mortality Rate by Procedures")
+ggsave("procedure-eda.png")
+```
+
+```{r}
+ggplot(df, aes(x = total, y = deaths/total, color = procedure)) + geom_point() +  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ggtitle("Death Rate vs Volume")
+ggsave("volume-eda.png")
+```
+
+
+## I noted that there are two prominent grouping structures in the data, namely that of hospitals and that of procedure type, presented us with two crossed random effects. 
+
+## I noted that the outcome of interest is mortality rate, a probability on a binary event (death or no death). Hence the data could be modeled using a hierarchical logistic regression: 
+
+
+\begin{align}
+    \text{logit}(\frac{\text{death}_{hp}}{\text{total}_{hp}}) &= \alpha^v_{h} + \beta^v_{p}\\
+    \alpha^v_{h} &\sim N(\alpha_0 + \alpha_1\log(v_{h} + 1), \sigma_{\alpha}^2)\\
+    \beta^v_{p} &\sim N(\beta_0 + \beta_1\log(v_{p} + 1), \sigma_{\beta}^2)\\
+    \alpha_{0,1} &\sim N(0, \tau_\alpha^2)\\
+    \beta_{0,1} &\sim N(0, \tau_\beta^2)\\
+    \sigma_\alpha^2 &\sim \text{InverseGamma}(1,1)\\
+    \sigma_\beta^2 &\sim \text{InverseGamma}(1,1)
+\end{align}
+where $\alpha_h$ denotes the hospital effect and $\beta_p$ denotes the procedure effect.
+
+```{r}
+library(brms)
+fit <- brm(deaths|trials(total) ~ (1|hospital) + (1|procedure), family = binomial("logit"), data = df, chains = 1, iter = 4000)
+```
+
+```{r}
+library(brmstools)
+
+forest(fit, grouping = "hospital", par = "Intercept", text = F)+ ggtitle("Posterior Effects of Hospital") + theme(axis.text = element_text(size = 4))
+ggsave("hospital-posterior.png")
+```
+
+```{r}
+forest(fit, grouping = "procedure", par = "Intercept", text = F)+ ggtitle("Posterior Effects of Procedure") + theme(axis.text = element_text(size = 4))
+ggsave("procedure-posterior.png")
+```
+
+
+
+```{r}
+logit2prob <- function(logit){
+  odds <- exp(logit)
+  prob <- odds / (1 + odds)
+  return(prob)
+}
+
+df.hospital <- df %>% group_by(hospital) %>% summarise(volume = sum(total))
+df.hospital$estimates <- logit2prob(coefficients(fit)$hospital[,,'Intercept'][,1])
+ggplot(data = df.hospital, aes(x=volume, y = estimates)) + geom_point() + ggtitle("Shrinkage in Naive Model")
+ggsave("shrinkage-naive.png")
+```
+
+
+```{r}
+fith <- brm(deaths|trials(total) ~ (1 + log_volume_h|hospital) + (1 + log_volume_p|procedure), family = binomial("logit"), data = df, chains = 1, iter = 4000)
+```
+
+```{r}
+forest(fith, grouping = "hospital", par = "Intercept", text = F)+ ggtitle("Posterior Effects of Hospital Adjusted for Volume") + theme(axis.text = element_text(size = 4))
+ggsave("hospital-posterior-v.png")
+```
+
+```{r}
+forest(fith, grouping = "procedure", par = "Intercept", text = F)+ ggtitle("Posterior Effects of Procedures Adjusted for Volume") + theme(axis.text = element_text(size = 4))
+ggsave("hospital-procedure-v.png")
+```
+```{r}
+df.hospital.v <- df %>% group_by(hospital) %>% summarise(volume = sum(total))
+df.hospital.v$estimates <- coefficients(fith)$hospital[,,'Intercept'][,1] + coefficients(fith)$hospital[,,'Intercept'][,1]*log(df.hospital.v$volume + 1)
+ggplot(data = df.hospital.v, aes(x=volume, y = estimates)) + geom_point() + ggtitle("Shrinkage in Volume Model")
+ggsave("shrinkage-vol.png")
+```
+
+```{r}
+cardio %>% group_by(`Hospital Name`) %>% filter(`Procedure Type` == "Overall") %>% select(`Expected Mortality Rate`)
+```
+
+
+```{r}
+library(ggfortify)
+v.estimates <- df %>% group_by(hospital) %>% summarise(v= sum(total))
+v.estimates$lower <- coefficients(fith)$hospital[,,'Intercept'][,3]
+v.estimates$upper <- coefficients(fith)$hospital[,,'Intercept'][,4]
+v.estimates$observed <- overall.save$observed
+v.estimates$mean <- coefficients(fith)$hospital[,,'Intercept'][,1]
+v.estimates$err <- coefficients(fith)$hospital[,,'Intercept'][,2]
+v.estimates <- v.estimates %>% mutate(newmean = observed/logit2prob(mean), newerr = observed/logit2prob(err), newlow = newmean- newerr, newhigh = newmean+ newerr ) %>% arrange(desc(newmean))
+p <- ggplot(data = v.estimates) + geom_point(aes(x = hospital, y = newmean)) + geom_errorbar(aes(x = hospital, ymin=newlow, ymax=newhigh,color=ifelse(newlow < 1,'red','green')), width=0, lty=1, size=1) + theme(legend.title = element_blank())
+p + theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + ggtitle("O/E Intervals, colored with 3 stars in red")
+ggsave("oe.png")
+v.estimates %>% select(hospital, newlow)
+```
+
+
+
+
+
+
+
+
+
+```{r}
+df.proc.v <- df %>% group_by(procedure) %>% summarise(volume = sum(total))
+df.proc.v$estimates <- coefficients(fith)$procedure[,,'Intercept'][,1] + coefficients(fith)$procedure[,,'Intercept'][,1]*log(df.proc.v$volume + 1)
+ggplot(data = df.proc.v, aes(x=volume, y = estimates)) + geom_point() + ggtitle("Shrinkage in Volume Model")
+```
+
+
+```{r}
+pp_check(fit)
+ggsave("naive_ppc.png")
+pp_check(fith)
+ggsave("volume_ppc.png")
+```
+```{r}
+fit.sq <- brm(deaths|trials(total) ~ (1 + log_volume_h + log_volume_h_sq|hospital) + (1 + log_volume_p+ log_volume_p_sq|procedure), family = binomial("logit"), data = df, chains = 1, iter = 4000)
+```
+
+```{r}
+df.hospital.v.sq <- df %>% group_by(hospital) %>% summarise(volume = sum(total))
+df.hospital.v.sq$estimates <- coefficients(fit.sq)$hospital[,,'Intercept'][,1] + coefficients(fit.sq)$hospital[,,'Intercept'][,1]*log(df.hospital.v.sq$volume + 1) + coefficients(fit.sq)$hospital[,,'Intercept'][,1]*log(df.hospital.v.sq$volume + 1)^2
+ggplot(data = df.hospital.v.sq, aes(x=volume, y = estimates)) + geom_point() + ggtitle("Shrinkage in Volume Model")
+ggsave("shrinkage-vol.png")
+```
+
+```{r}
+pp_check(fit.sq)
+```
+```{r}
+UNC <- data.frame("id" = rep("UNC",6), "Hospital Name"= rep("UNC Hospital",6), "Procedure Type"=c("Overall","STAT Mortality Category 1", "STAT Mortality Category 2", "STAT Mortality Category 3", "STAT Mortality Category 4", "STAT Mortality Category 5"), "Observed Deaths"=c(25,1,2,4,11,7), "Total Procedures"=c(393,94,136,70,81,12),"Expected Mortality Rate"=c(3/100,0.4/100,1.4/100,1.6/100,7.8/100,17.3/100),check.names = FALSE)
+cardio <- bind_rows(cardio, UNC)
+cardio <- cardio %>% mutate(`Observed Mortality Rate` = `Observed Deaths` / `Total Procedures`)
+eda <- cardio %>% filter(`Procedure Type`== "Overall")
+
+ggplot(eda, aes(x = id, y = `Observed Mortality Rate`)) + 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ggtitle("Overall Mortality Rate by hospitals")
+ggsave("hospitaloverall.png")
+```
+
