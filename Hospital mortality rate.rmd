@@ -59,12 +59,12 @@ ggplot(df, aes(x = total, y = deaths/total, color = procedure)) + geom_point() +
 ggsave("volume-eda.png")
 ```
 
+## Model
+I noted that there are two prominent grouping structures in the data, namely that of hospitals and that of procedure type, presented us with two crossed random effects. 
 
-## I noted that there are two prominent grouping structures in the data, namely that of hospitals and that of procedure type, presented us with two crossed random effects. 
+Also, the outcome of interest is mortality rate, a probability on a binary event (death or no death). Hence the data could be modeled using a hierarchical logistic regression: 
 
-## I noted that the outcome of interest is mortality rate, a probability on a binary event (death or no death). Hence the data could be modeled using a hierarchical logistic regression: 
-
-
+$$
 \begin{align}
     \text{logit}(\frac{\text{death}_{hp}}{\text{total}_{hp}}) &= \alpha^v_{h} + \beta^v_{p}\\
     \alpha^v_{h} &\sim N(\alpha_0 + \alpha_1\log(v_{h} + 1), \sigma_{\alpha}^2)\\
@@ -74,6 +74,7 @@ ggsave("volume-eda.png")
     \sigma_\alpha^2 &\sim \text{InverseGamma}(1,1)\\
     \sigma_\beta^2 &\sim \text{InverseGamma}(1,1)
 \end{align}
+$$
 where $\alpha_h$ denotes the hospital effect and $\beta_p$ denotes the procedure effect.
 
 ```{r}
