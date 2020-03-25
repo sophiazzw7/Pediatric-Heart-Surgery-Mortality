@@ -19,11 +19,16 @@ during the 2015-2018 reporting period and the number of deaths resulting from th
 
 The data contains the following variables.
 • id: unique hospital identifier
+
 • Hospital Name
+
 • Procedure Type: overall (mortality for all procedures), STAT mortality category 1 (generally the
 lowest risk procedures) through STAT mortality category 5 (generally the highest risk procedures)
+
 • Observed deaths
+
 • Total procedures (observed deaths/total procedures is the observed mortality rate)
+
 • Expected mortality rate (this mortality rate is adjusted to reflect the individual case mix in the
 procedure type of interest for the hospital of interest)
 
@@ -36,14 +41,16 @@ lowest mortality), and category 5 represents the most challenging procedures ass
 mortality. 
 One common performance metric is the ratio of observed to expected (O to E) mortality rates, accompanied
 by a 95% interval estimate. Ratios significantly higher than 1 indicate hospitals with significantly more
-deaths than expected, while ratios < 1 indicate the better-performing hospitals. You can see in the UNC
-data that mortality rates were quite high there relative to expectations for the more complex procedures.
+deaths than expected, while ratios < 1 indicate the better-performing hospitals. 
 The STS rates each hospital by providing a star rating as follows:
 • one star: higher than expected operative mortality; the 95% confidence interval (CI) for a participant’s risk-adjusted O/E mortality ratio was entirely above the number 1
+
 • two stars: as expected operative mortality; the 95% CI for a participant’s risk-adjusted O/E
 mortality ratio overlapped with the number 1
+
 • three stars: lower than expected operative mortality; the 95% CI for a participant’s risk-adjusted
 O/E mortality ratio was entirely below the number 1
+
 An alternative star method, used for adult procedures, awards three stars if the posterior probability
 that the hospital’s mortality ratio exceeds the STS mean is 0.975 or greater, one star if the posterior
 probability that the hospital’s mortality ratio exceeds the STS mean is 0.025 or lower, and two stars
